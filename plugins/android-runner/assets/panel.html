@@ -271,7 +271,7 @@
  * ============================================================== */
 
 const SURFACE = 'android-runner';
-const VERSION = '0.4.7'; // 与 .zcode-plugin/plugin.json 保持一致
+const VERSION = '0.4.8'; // 与 .zcode-plugin/plugin.json 保持一致
 const PROTOCOL = '2026-01-26';
 
 const pending = new Map();
@@ -325,6 +325,25 @@ async function callTool(name, args) {
   try { return JSON.parse(text); } catch { return { text }; }
 }
 
+/**
+ * 读 MCP resource。状态/任务/日志都走这里:resources/read 不会被宿主当成
+ * 工具调用去审批,面板定时刷新才不会反复弹权限。失败时返回 null,调用方回退工具。
+ */
+async function readJsonResource(uri) {
+  if (state.resourceReads === 'failed' && Date.now() < state.resourceRetryAt) return null;
+  try {
+    const result = await rpcRequest('resources/read', { uri }, 4000);
+    const text = result && result.contents && result.contents[0] && result.contents[0].text;
+    if (!text) throw new Error('空资源');
+    state.resourceReads = 'ok';
+    return JSON.parse(text);
+  } catch (error) {
+    state.resourceReads = 'failed';
+    state.resourceRetryAt = Date.now() + 60000;
+    return null;
+  }
+}
+
 function reportSize() {
   const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
   const width = Math.ceil(window.innerWidth);
@@ -347,6 +366,8 @@ const state = {
   tab: 'output',
   buffers: { output: '', logcat: '' },
   busy: false,
+  resourceReads: 'unknown',
+  resourceRetryAt: 0,
   diag: [],
   notice: null,
   noticeTimer: null
@@ -658,7 +679,10 @@ function pollJob(jobId, action) {
   const tick = async () => {
     let res;
     try {
-      res = await callTool('panel_job', { id: jobId });
+      res =
+        (await readJsonResource(`ui://android-runner/job/${encodeURIComponent(jobId)}.json?t=${Date.now()}`)) ||
+        (await callTool('panel_job', { id: jobId }));
+      if (res && res.error) throw new Error(res.error);
       state.jobFailures = 0;
     } catch (error) {
       // 偶发超时不要直接放弃作业:服务端可能还在跑
@@ -738,7 +762,9 @@ async function startLogcat() {
   const tick = async () => {
     let res;
     try {
-      res = await callTool('panel_logcat', { op: 'poll' });
+      res =
+        (await readJsonResource(`ui://android-runner/logcat.json?t=${Date.now()}`)) ||
+        (await callTool('panel_logcat', { op: 'poll' }));
       state.logcatFailures = 0;
     } catch (error) {
       state.logcatFailures += 1;
@@ -945,7 +971,9 @@ function wire() {
 
 async function refreshStatus(force) {
   try {
-    const status = await callTool('panel_status', force ? { refresh: true } : {});
+    const status =
+      (await readJsonResource(`ui://android-runner/state.json?t=${Date.now()}${force ? '&refresh=1' : ''}`)) ||
+      (await callTool('panel_status', force ? { refresh: true } : {}));
     state.status = status;
     render();
   } catch (error) {

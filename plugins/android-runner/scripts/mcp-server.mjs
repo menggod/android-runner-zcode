@@ -32,6 +32,10 @@ const PLUGIN_VERSION = (() => {
 const SURFACE_ID = 'android-runner';
 const PANEL_URI = `ui://${SURFACE_ID}/panel.html`;
 const ASSET_PREFIX = `ui://${SURFACE_ID}/assets/`;
+const STATE_URI = `ui://${SURFACE_ID}/state.json`;
+const LOGCAT_URI = `ui://${SURFACE_ID}/logcat.json`;
+const JOB_PREFIX = `ui://${SURFACE_ID}/job/`;
+const JSON_MIME = 'application/json';
 const HTML_MIME = 'text/html;profile=mcp-app';
 
 const STATE_FILE = join(os.homedir(), '.android-runner', 'panel-state.json');
@@ -454,6 +458,21 @@ function pollJob(id) {
   };
 }
 
+/** 给客户端(工具或资源)的增量结果;资源读取也要推进 readAt。 */
+function pollJobForClient(id) {
+  const result = pollJob(id);
+  if (!result) return null;
+  const { _readAt, ...rest } = result;
+  const job = jobs.get(id);
+  if (job) job.readAt = _readAt;
+  return rest;
+}
+
+function pollLogcatForClient() {
+  const lines = logcat.lines.splice(0, logcat.lines.length);
+  return { running: !!logcat.child, serial: logcat.serial, lines };
+}
+
 /* ------------------------------------------------------------------ */
 /* logcat                                                             */
 /* ------------------------------------------------------------------ */
@@ -712,12 +731,9 @@ async function callTool(name, args = {}) {
       return jsonResult({ jobId: job.id, action: job.action, command: `ar.js ${job.args.join(' ')}` });
     }
     case 'panel_job': {
-      const result = pollJob(args.id);
+      const result = pollJobForClient(args.id);
       if (!result) return jsonResult({ error: 'unknown job' }, true);
-      const { _readAt, ...rest } = result;
-      const job = jobs.get(args.id);
-      if (job) job.readAt = _readAt;
-      return jsonResult(rest);
+      return jsonResult(result);
     }
     case 'panel_logcat': {
       if (args.op === 'start') {
@@ -728,8 +744,7 @@ async function callTool(name, args = {}) {
         stopLogcat();
         return jsonResult({ stopped: true });
       }
-      const lines = logcat.lines.splice(0, logcat.lines.length);
-      return jsonResult({ running: !!logcat.child, serial: logcat.serial, lines });
+      return jsonResult(pollLogcatForClient());
     }
     case 'panel_select_project': {
       const project = await resolveProject(args.project);
@@ -881,6 +896,16 @@ async function handle(message) {
             uri: PANEL_URI,
             name: 'Android Runner panel',
             mimeType: HTML_MIME
+          },
+          {
+            uri: STATE_URI,
+            name: 'Android Runner state',
+            mimeType: JSON_MIME
+          },
+          {
+            uri: LOGCAT_URI,
+            name: 'Android Runner logcat',
+            mimeType: JSON_MIME
           }
         ]
       });
@@ -888,14 +913,16 @@ async function handle(message) {
     case 'resources/templates/list':
       reply(id, {
         resourceTemplates: [
-          { uriTemplate: `${ASSET_PREFIX}{+name}`, name: 'assets', mimeType: 'text/css' }
+          { uriTemplate: `${ASSET_PREFIX}{+name}`, name: 'assets', mimeType: 'text/css' },
+          { uriTemplate: `${JOB_PREFIX}{id}.json`, name: 'job', mimeType: JSON_MIME }
         ]
       });
       return;
     case 'resources/read': {
       const uri = params?.uri || '';
+      const clean = String(uri).split(/[?#]/)[0];
       try {
-        if (uri === PANEL_URI) {
+        if (clean === PANEL_URI) {
           reply(id, {
             contents: [
               {
@@ -908,8 +935,29 @@ async function handle(message) {
           });
           return;
         }
-        if (uri.startsWith(ASSET_PREFIX)) {
-          const name = decodeURIComponent(uri.slice(ASSET_PREFIX.length));
+        // 状态/任务/日志走资源读取:宿主不会把 resources/read 当成工具调用去审批,
+        // 这样面板的定时刷新不会反复弹权限;只有动作按钮才走 tools/call。
+        if (clean === STATE_URI) {
+          const status = await collectStatus({ force: /[?&]refresh=1(?:&|$)/.test(uri) });
+          reply(id, { contents: [{ uri, mimeType: JSON_MIME, text: JSON.stringify(status) }] });
+          return;
+        }
+        if (clean === LOGCAT_URI) {
+          reply(id, { contents: [{ uri, mimeType: JSON_MIME, text: JSON.stringify(pollLogcatForClient()) }] });
+          return;
+        }
+        if (clean.startsWith(JOB_PREFIX)) {
+          const jobId = decodeURIComponent(clean.slice(JOB_PREFIX.length).replace(/\.json$/i, ''));
+          const result = pollJobForClient(jobId);
+          reply(id, {
+            contents: [
+              { uri, mimeType: JSON_MIME, text: JSON.stringify(result || { error: 'unknown job' }) }
+            ]
+          });
+          return;
+        }
+        if (clean.startsWith(ASSET_PREFIX)) {
+          const name = decodeURIComponent(clean.slice(ASSET_PREFIX.length));
           const asset = await readAsset(name);
           reply(id, { contents: [{ uri, ...asset }] });
           return;

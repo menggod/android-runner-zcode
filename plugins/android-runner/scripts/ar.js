@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.7';
+const VERSION = '0.4.8';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -76,7 +76,8 @@ function printHelp() {
   --reinstall            显式允许签名不一致时自动卸载重装(覆盖 --no-reinstall)
   --no-reinstall         关闭自动替换:签名不一致/版本回退时直接报错退出(exit 3)
   --yes / -y             确认破坏性操作(uninstall / clear-data)
-  --no-local-properties  不自动生成 local.properties
+  --local-properties     缺少 local.properties 时自动生成(默认不写工程文件)
+  --no-local-properties  兼容旧参数(默认行为)
   --json                 结构化输出(devices / info)
 
 示例:
@@ -93,7 +94,7 @@ const opts = {
   adb: process.env.AR_ADB || '', javaHome: process.env.AR_JAVA_HOME || '',
   serial: '', emulator: '', javaPath: '', clear: false, json: false, yes: false, reinstall: false,
   noReinstall: false,
-  localProperties: true, open: false
+  localProperties: false, open: false
 };
 let command = '';
 let gradleArgs = [];
@@ -116,6 +117,7 @@ try {
     if (a === '--yes' || a === '-y') { opts.yes = true; continue; }
     if (a === '--reinstall') { opts.reinstall = true; continue; }
     if (a === '--no-reinstall') { opts.noReinstall = true; continue; }
+    if (a === '--local-properties') { opts.localProperties = true; continue; }
     if (a === '--no-local-properties') { opts.localProperties = false; continue; }
     if (a === '--clear') { opts.clear = true; continue; }
     if (a === '--open') { opts.open = true; continue; }
@@ -789,7 +791,7 @@ function ensureGradlewExecutable() {
   }
 }
 
-/** 缺少 local.properties 时自动生成(该文件通常在 .gitignore 中)。 */
+/** 仅在显式 --local-properties 时生成;默认不改工程文件,构建用 ANDROID_HOME。 */
 function ensureLocalProperties() {
   if (!opts.localProperties) return;
   const root = projectRoot();

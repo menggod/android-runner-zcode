@@ -46,10 +46,18 @@ Anything undetected can be passed explicitly: `--module`, `--variant`, `--flavor
 - Pin a channel: `ar flavor <name>` (saved per project, `ar flavor --clear` restores auto), the panel's Flavor dropdown, or `/android-flavor`; one-off with `--flavor <name>`.
 - The panel's Flavor row supports both a dropdown and free input: when flavors are generated dynamically, type the name and click Apply (or use `/android-flavor <name>`).
 
+## Permissions
+
+- Panel **state, job output and logcat refresh go through MCP resources** (`ui://android-runner/state.json`, etc.), not tool calls, so periodic refreshes no longer trigger approval prompts.
+- Only **clicking an action button** calls an MCP tool (build/install/run, switching device/JDK/flavor, logcat start/stop). ZCode asks once according to the current permission mode — that is a real side effect and expected.
+- ZCode currently marks every MCP tool as approval-required (even with `readOnlyHint`), so avoid tool polling for status.
+- Running `ar.js` through the agent's shell may still trigger Bash approval; prefer the panel, or use full-access mode.
+- The plugin **does not modify project files by default** (no auto-created `local.properties`); builds pass the SDK via `ANDROID_HOME`.
+
 ## Side effects and safety
 
 - **Command execution**: runs the project's own `gradlew` and `adb` on the local machine. No network access of its own.
-- **File writes**: may create `local.properties` when missing (contains `sdk.dir`); remembers device/project choices in `~/.android-runner/`.
+- **File writes**: **the project is not modified by default** — no more auto-created `local.properties`; builds pass the SDK via `ANDROID_HOME`. Opt in with `--local-properties` if needed. Preferences live in `~/.android-runner/`; build outputs in `build/`.
 - **Destructive**: on signature mismatch or version downgrade, install **uninstalls and reinstalls automatically**, wiping the app's local data. Opt out with `--no-reinstall`; `--reinstall` opts back in and wins over `--no-reinstall`. Before uninstalling it verifies the package actually installed on the device, so `applicationIdSuffix` builds are handled.
 - `uninstall` / `clear-data` are destructive: the panel asks for confirmation, the CLI requires an explicit `--yes`.
 - **Multiple devices**: with more than one online device and no target selected, the panel asks you to pick one and disables install/launch-style actions. `build` is unaffected and never needs a device.

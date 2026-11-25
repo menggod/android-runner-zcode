@@ -46,10 +46,18 @@ node scripts/ar.js logcat          # 只看本应用进程的日志
 - 想固定某个渠道:`ar flavor <名字>`(按工程记住,`ar flavor --clear` 恢复自动),或面板「应用」区的 Flavor 下拉、`/android-flavor` 命令;单次用 `--flavor <名字>`。
 - 面板「应用」区的 Flavor 支持**下拉选择 + 直接输入**:静态解析不到动态 flavor 时,输入名字点「应用」即可(也支持 `/android-flavor 名字`)。
 
+## 权限
+
+- 面板的**状态、任务输出、logcat 刷新走 MCP resource**(`ui://android-runner/state.json` 等),不经过工具审批,所以定时刷新不会反复弹权限。
+- 只有**点击操作按钮**才会调用 MCP 工具(编译/安装/运行/切换设备/JDK/Flavor、启停 logcat),ZCode 会按当前权限模式请求一次确认;这是真实副作用,属于预期。
+- ZCode 当前会把所有 MCP 工具标为需要审批(即使 `readOnlyHint`),所以不要用工具轮询状态。
+- 聊天里让 agent 直接跑 `ar.js` 仍可能触发 Bash 审批;优先用面板,或切换到完全访问模式。
+- 插件**默认不修改工程文件**(不再自动写 `local.properties`),构建通过 `ANDROID_HOME` 传给 Gradle。
+
 ## 副作用与安全
 
 - **命令执行**:在本机运行工程自己的 `gradlew` 和 `adb`,插件自身不联网。
-- **文件写入**:缺少 `local.properties` 时可能自动创建(写入 `sdk.dir`);在 `~/.android-runner/` 记住设备与工程选择。
+- **文件写入**:**默认不改工程文件**(不再自动创建 `local.properties`;构建通过 `ANDROID_HOME` 传给 Gradle)。需要时可加 `--local-properties`。偏好记在 `~/.android-runner/`,构建产物在 `build/`。
 - **破坏性**:签名不一致或版本回退时,安装会**自动卸载重装**,并清空该应用的本地数据。可用 `--no-reinstall` 关闭,`--reinstall` 显式允许(优先于 `--no-reinstall`)。卸载前会核对设备上实际安装的包名,兼容 `applicationIdSuffix`。
 - `uninstall` / `clear-data` 属破坏性操作:面板里会二次确认,命令行需要显式 `--yes`。
 - **多设备**:同时连接多台设备且未选择目标时,面板会提示先「设为当前」,安装/启动类操作暂不可用;`build` 不受影响,无需选择设备。
