@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.4';
+const VERSION = '0.4.5';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -335,21 +335,20 @@ function requireFlavorIfAmbiguous() {
         `为避免一次编译所有渠道,请用 --flavor <名字> 指定(开发调试通常选 official)`
     );
   }
-  // 有 flavor 配置但静态解析不到名字:同样不能退回 assembleDebug(会编全部渠道)
-  if (!flavors.length && hasFlavorConfig(projectRoot(), module())) {
-    throw new CliError(
-      EXIT.ENV,
-      '检测到 flavor 配置但无法解析 flavor 名称\n' +
-        '为避免一次编译所有渠道,请用 --flavor <名字> 指定(开发调试通常选 official)'
-    );
-  }
+  // 解析不到任何 flavor 时不拦:按普通 debug 构建(用户可再手动指定)
   return '';
 }
 
-/** flavor 未确定(多 flavor,或有 flavor 配置但解析不出):APK/构建都不能猜。 */
+/** 明确识别到多个 flavor 且没有选择:必须让用户选,不能猜。 */
 function flavorUnresolved() {
   if (flavor()) return false;
-  return availableFlavors().length > 1 || hasFlavorConfig(projectRoot(), module());
+  return availableFlavors().length > 1;
+}
+
+/** 有 flavor 配置但一个名字都没解析出来:默认按普通 debug 构建。 */
+function flavorUnknown() {
+  if (flavor()) return false;
+  return availableFlavors().length === 0 && hasFlavorConfig(projectRoot(), module());
 }
 
 /* ------------------------------------------------------------------ */
@@ -1062,9 +1061,12 @@ function gradleTaskFor() {
 }
 
 function findApkForConfiguration() {
-  // 多个 flavor 又没选:任何 APK 都可能不是用户要的,宁可不显示
+  // 明确多个 flavor 又没选:任何 APK 都可能不是用户要的,宁可不显示
   if (flavorUnresolved()) return null;
-  return findApk(projectRoot(), module(), variant(), (opts.apk || '').trim(), flavor());
+  // 解析不到 flavor 时只认普通 debug 产物,不要误拿某个渠道的 APK
+  return findApk(projectRoot(), module(), variant(), (opts.apk || '').trim(), flavor(), {
+    plainOnly: flavorUnknown()
+  });
 }
 
 function resolveApk() {
@@ -1171,6 +1173,9 @@ function runGradle(args, device) {
 
 async function build(device) {
   requireFlavorIfAmbiguous();
+  if (flavorUnknown()) {
+    console.log('⚠ 未识别到 flavor,按普通 debug 构建;需要指定渠道请用 --flavor <名字> 或面板 Flavor 输入');
+  }
   const task = gradleTaskFor();
   // 显式把选中的 JDK 传给 Gradle,覆盖 gradle.properties 里可能写死的 org.gradle.java.home
   const javaDetail = detectJavaHomeDetail();
@@ -1790,6 +1795,7 @@ async function cmdInfo() {
     flavors: availableFlavors(),
     variantFull: fullVariant(),
     flavorAmbiguous: flavorUnresolved(),
+    flavorUnknown: flavorUnknown(),
     task: gradleTaskFor(),
     modules: discoverModules(root, module()),
     sdk: detectSdkDir() || '',

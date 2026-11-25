@@ -42,7 +42,7 @@ Anything undetected can be passed explicitly: `--module`, `--variant`, `--flavor
 
 - **The JDK must match the Gradle version.** The plugin reads `gradle-wrapper.properties` and `gradle.properties` (e.g. a legacy `-XX:MaxPermSize` only works on Java 8) and auto-picks a compatible JDK, preferring the one configured by the project.
 - Pin one: `ar java <path or 17 / corretto-17>` (saved per project); `ar java --clear` restores auto; one-off with `--java-home` or `AR_JAVA_HOME`. The panel's environment section can switch it too. Or use the `/android-java` shortcut.
-- Multi-channel projects (`channel.txt` + `productFlavors`) default to the `official` **debug** variant — runs and builds stay on debug and never build every channel at once. Pass `--flavor <name>` for one specific channel (still debug only). With several flavors and no `official`, the plugin asks you to choose.
+- Multi-channel projects (`channel.txt` + `productFlavors`) default to the `official` **debug** variant — runs and builds stay on debug and never build every channel at once. Pass `--flavor <name>` for one specific channel (still debug only). With several detected flavors and no `official`, the plugin asks you to choose; when no flavor name can be detected at all, it falls back to a plain debug build (the panel also accepts a typed name).
 - Pin a channel: `ar flavor <name>` (saved per project, `ar flavor --clear` restores auto), the panel's Flavor dropdown, or `/android-flavor`; one-off with `--flavor <name>`.
 - The panel's Flavor row supports both a dropdown and free input: when flavors are generated dynamically, type the name and click Apply (or use `/android-flavor <name>`).
 

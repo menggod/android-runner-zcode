@@ -42,7 +42,7 @@ node scripts/ar.js logcat          # 只看本应用进程的日志
 
 - **JDK 必须和 Gradle 版本匹配**。插件会读 `gradle-wrapper.properties` 与 `gradle.properties`(例如老工程的 `-XX:MaxPermSize` 只能用 Java 8),自动挑选兼容的 JDK;工程里配置的 JDK 优先。
 - 想固定用某个 JDK:`ar java <路径 或 17 / corretto-17>`(按工程记住);`ar java --clear` 恢复自动;单次可用 `--java-home` 或环境变量 `AR_JAVA_HOME`。面板「环境」区也能切换。 也可以用 `/android-java` 快捷命令。
-- 多渠道工程(`channel.txt` + `productFlavors`)默认打 `official` 的 debug 包,**运行/编译始终是 debug**,不会切 release,也不会一次编所有渠道;需要某渠道时加 `--flavor <名字>`(仍然只编该渠道的 debug)。多 flavor 且没有 `official` 时会提示你先选。
+- 多渠道工程(`channel.txt` + `productFlavors`)默认打 `official` 的 debug 包,**运行/编译始终是 debug**,不会切 release,也不会一次编所有渠道;需要某渠道时加 `--flavor <名字>`(仍然只编该渠道的 debug)。多 flavor 且没有 `official` 时会提示你先选;如果完全解析不到 flavor 名称,则默认按普通 debug 构建(面板里也可以直接输入名字)。
 - 想固定某个渠道:`ar flavor <名字>`(按工程记住,`ar flavor --clear` 恢复自动),或面板「应用」区的 Flavor 下拉、`/android-flavor` 命令;单次用 `--flavor <名字>`。
 - 面板「应用」区的 Flavor 支持**下拉选择 + 直接输入**:静态解析不到动态 flavor 时,输入名字点「应用」即可(也支持 `/android-flavor 名字`)。
 

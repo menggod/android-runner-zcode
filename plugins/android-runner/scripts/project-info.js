@@ -114,7 +114,8 @@ function hasFlavorConfig(root, module) {
   return /productFlavors\s*\{|flavorDimensions\b/.test(text);
 }
 
-function findApk(root, module, variant, explicit, flavor) {
+function findApk(root, module, variant, explicit, flavor, options) {
+  const plainOnly = !!(options && options.plainOnly);
   if (!root) return null;
   if (explicit) return { path: path.resolve(root, explicit), applicationId: '' };
   const base = path.join(moduleDirectory(root, module), 'build', 'outputs', 'apk');
@@ -126,6 +127,7 @@ function findApk(root, module, variant, explicit, flavor) {
   const matchesVariant = (name) => {
     const value = String(name || '').toLowerCase();
     if (variants.has(value)) return true;
+    if (plainOnly) return false;
     // 没有 flavor 信息时,允许 <flavor><variant> 这种 AGP 命名
     return !flavorLower && value.endsWith(variantLower);
   };
@@ -198,6 +200,10 @@ function findApk(root, module, variant, explicit, flavor) {
       apks.sort((a, b) => mtime(b) - mtime(a));
       if (apks.length) return { path: apks[0], applicationId: '' };
     } catch (_) { /* 继续找下一个布局 */ }
+  }
+
+  if (plainOnly) {
+    return { path: path.join(base, variantLower, `${module.split(':').pop()}-${variantLower}.apk`), applicationId: '' };
   }
 
   // 兜底:channel 重建或自定义输出目录;有 flavor 时只认带 flavor 的路径

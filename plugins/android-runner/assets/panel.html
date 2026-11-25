@@ -270,7 +270,7 @@
  * ============================================================== */
 
 const SURFACE = 'android-runner';
-const VERSION = '0.4.4'; // 与 .zcode-plugin/plugin.json 保持一致
+const VERSION = '0.4.5'; // 与 .zcode-plugin/plugin.json 保持一致
 const PROTOCOL = '2026-01-26';
 
 const pending = new Map();
@@ -409,9 +409,10 @@ function render() {
     banner.textContent = '检测到多台在线设备,请先点设备卡片上的「设为当前」选择目标设备。';
   } else if (st.app && st.app.flavorAmbiguous) {
     banner.className = 'banner show warn';
-    banner.textContent = (st.app.flavors || []).length
-      ? '工程有多个 productFlavor,请在下方「应用」区选择 Flavor 后运行。'
-      : '检测到 flavor 配置但未解析出名称,请在下方「应用」区输入 Flavor(如 official)后点「应用」。';
+    banner.textContent = '工程有多个 productFlavor,请先在下方「应用」区选择 Flavor 再运行。';
+  } else if (st.app && st.app.flavorUnknown) {
+    banner.className = 'banner show warn';
+    banner.textContent = '未识别到 flavor,将按普通 debug 构建;如工程有多渠道,可在下方「应用」区输入名字后点「应用」。';
   } else {
     banner.className = 'banner';
   }
@@ -481,11 +482,11 @@ function render() {
   const flavorOptions = flavors
     .map((name) => `<option value="${esc(name)}"${name === flavorPref ? ' selected' : ''}>${esc(name)}</option>`)
     .join('');
-  const showFlavorRow = flavors.length > 0 || app.flavorAmbiguous || !!flavorPref;
+  const showFlavorRow = flavors.length > 0 || app.flavorAmbiguous || app.flavorUnknown || !!flavorPref;
   const flavorRow = showFlavorRow
     ? `<div class="kv-row"><span class="kv-k">Flavor</span><span class="kv-v"><span class="flavor-edit">
         ${flavors.length ? `<select id="flavorSelect" title="只影响 debug;不会一次编所有渠道"><option value=""${flavorPref ? '' : ' selected'}>自动(默认 official)</option>${flavorOptions}</select>` : ''}
-        <input id="flavorInput" type="text" placeholder="${flavors.length ? '或输入其他' : '输入 flavor'}" value="${esc(flavorPref)}" />
+        <input id="flavorInput" type="text" placeholder="${flavors.length ? '或输入其他' : (app.flavorAmbiguous ? '输入 flavor' : '可留空')}" value="${esc(flavorPref)}" />
         <button id="flavorApply" title="按输入的 flavor 构建 debug">应用</button>
       </span></span></div>`
     : '';
@@ -494,10 +495,10 @@ function render() {
     kvRow('模块 / 变体', `${app.module || 'app'} · ${app.variantFull || `${app.flavor ? app.flavor + ' ' : ''}${app.variant || 'debug'}`}`),
     flavorRow,
     app.flavorAmbiguous
-      ? kvRow('Flavor 提示', flavors.length
-          ? `多个:${flavors.join('、')} —— 先选一个再运行`
-          : '未解析出 flavor 名称,请在上面输入(如 official)后点「应用」', 'bad')
-      : '',
+      ? kvRow('Flavor 提示', `多个:${flavors.join('、')} —— 先选一个再运行`, 'bad')
+      : app.flavorUnknown
+        ? kvRow('Flavor 提示', '未识别到 flavor,默认按 debug 构建;可输入指定')
+        : '',
     apk
       ? kvRow('APK', `${esc(apk.name)} · ${fmtSize(apk.size)} · ${fmtAgo(apk.modifiedAt)}`)
       : kvRow('APK', '尚未构建', 'bad')

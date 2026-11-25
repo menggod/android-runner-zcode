@@ -342,6 +342,7 @@ async function collectStatus({ force = false } = {}) {
       flavors: Array.isArray(infoJson.flavors) ? infoJson.flavors : [],
       variantFull: infoJson.variantFull || '',
       flavorAmbiguous: !!infoJson.flavorAmbiguous,
+      flavorUnknown: !!infoJson.flavorUnknown,
       apk: infoJson.apk || null
     }
   };
