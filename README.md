@@ -34,6 +34,8 @@ ZCode 插件市场源,收录 **Android Device Runner** —— 在 ZCode 侧栏�
 - 命令行:`ar.js doctor|devices|use|run|build|install|launch|stop|restart|logcat`
 - 零配置:自动探测 Gradle 工程根、adb、SDK、JDK、包名、APK 路径
 - 工程跟随**当前窗口的工作区**,多窗口之间不串
+- 运行/编译固定 **debug**;多渠道工程默认只打 `official`,不会一次编所有渠道
+- 自动选择与 Gradle 版本兼容的 JDK;面板和 `ar java` 都能切换
 
 ## ⚠️ 破坏性行为
 

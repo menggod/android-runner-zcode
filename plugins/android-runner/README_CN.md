@@ -31,11 +31,18 @@ node scripts/ar.js logcat          # 只看本应用进程的日志
 |---|---|
 | 工程根目录 | 当前窗口工作区内找 `gradlew`(向上 6 层 / 向下扫描) |
 | adb | `local.properties` → `ANDROID_HOME` → 常见 SDK 目录 → `PATH` |
-| JDK | `.idea/gradle.xml` 的 `gradleJvm` → `JAVA_HOME` → 平台默认 |
+| JDK | 本工程记住的选择 → `gradle.properties` 的 `org.gradle.java.home` → `.idea/gradle.xml` 的 `gradleJvm` → `JAVA_HOME` → Android Studio JBR → 系统 `java` → 本机 JDK 目录(自动挑与 Gradle 版本兼容的) |
+| Flavor | 模块 `build.gradle` 的 `productFlavors`;默认 `official`(没有则唯一 flavor / `dev`) |
 | 包名 | `output-metadata.json` → 模块 `build.gradle` 的 `applicationId` |
-| APK | `build/outputs/apk/<variant>/` 下最新的产物 |
+| APK | `build/outputs/apk/<flavor>/<variant>/`(AGP 3.x 兼容 `output.json`) |
 
-探测不到时可显式指定:`--module`、`--variant`、`--apk`、`--package`、`--adb`、`--java-home`。
+探测不到时可显式指定:`--module`、`--variant`、`--flavor`、`--apk`、`--package`、`--adb`、`--java-home`。
+
+### JDK 与 Flavor
+
+- **JDK 必须和 Gradle 版本匹配**。插件会读 `gradle-wrapper.properties` 与 `gradle.properties`(例如老工程的 `-XX:MaxPermSize` 只能用 Java 8),自动挑选兼容的 JDK;工程里配置的 JDK 优先。
+- 想固定用某个 JDK:`ar java <路径 或 17 / corretto-17>`(按工程记住);`ar java --clear` 恢复自动;单次可用 `--java-home` 或环境变量 `AR_JAVA_HOME`。面板「环境」区也能切换。
+- 多渠道工程(`channel.txt` + `productFlavors`)默认打 `official` 的 debug 包,**运行/编译始终是 debug**,不会切 release,也不会一次编所有渠道;需要某渠道时加 `--flavor <名字>`(仍然只编该渠道的 debug)。多 flavor 且没有 `official` 时会提示你先选。
 
 ## 副作用与安全
 

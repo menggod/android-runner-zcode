@@ -263,7 +263,7 @@
  * ============================================================== */
 
 const SURFACE = 'android-runner';
-const VERSION = '0.4.1'; // 与 .zcode-plugin/plugin.json 保持一致
+const VERSION = '0.4.2'; // 与 .zcode-plugin/plugin.json 保持一致
 const PROTOCOL = '2026-01-26';
 
 const pending = new Map();
@@ -400,6 +400,9 @@ function render() {
   } else if (st.devices.filter((d) => d.state === 'device').length > 1 && !currentSerial()) {
     banner.className = 'banner show warn';
     banner.textContent = '检测到多台在线设备,请先点设备卡片上的「设为当前」选择目标设备。';
+  } else if (st.app && st.app.flavorAmbiguous) {
+    banner.className = 'banner show warn';
+    banner.textContent = '工程有多个 productFlavor,请用命令行 --flavor <名字> 指定(开发调试通常选 official)。';
   } else {
     banner.className = 'banner';
   }
@@ -466,7 +469,10 @@ function render() {
   const apk = app.apk;
   $('appKv').innerHTML = [
     kvRow('包名', app.packageName || '未识别', app.packageName ? 'ok' : 'bad'),
-    kvRow('模块 / 变体', `${app.module || 'app'} · ${app.variant || 'debug'}`),
+    kvRow('模块 / 变体', `${app.module || 'app'} · ${app.variantFull || `${app.flavor ? app.flavor + ' ' : ''}${app.variant || 'debug'}`}`),
+    app.flavorAmbiguous
+      ? kvRow('Flavor', `多个:${(app.flavors || []).join('、')} —— 需用 --flavor 指定`, 'bad')
+      : '',
     apk
       ? kvRow('APK', `${esc(apk.name)} · ${fmtSize(apk.size)} · ${fmtAgo(apk.modifiedAt)}`)
       : kvRow('APK', '尚未构建', 'bad')
@@ -474,14 +480,32 @@ function render() {
 
   // 环境
   const env = st.env || {};
+  const javaHomes = env.javaHomes || [];
+  const javaOptions = javaHomes
+    .map((home) => {
+      const label = `Java ${home.major}${home.version ? ' · ' + home.version : ''} · ${jdkLabel(home.home)}${home.compatible ? '' : ' · 与 Gradle 不兼容'}`;
+      const selected = env.javaHomePreference && home.home === env.javaHomePreference ? ' selected' : '';
+      return `<option value="${esc(home.home)}"${selected}>${esc(label)}</option>`;
+    })
+    .join('');
+  const autoSelected = env.javaHomePreference ? '' : ' selected';
+  const jdkRow = `<div class="kv-row"><span class="kv-k">JDK 选择</span><span class="kv-v"><select id="javaSelect" title="切换后按工程记住,只影响本机"><option value=""${autoSelected}>自动(按 Gradle 版本与工程配置)</option>${javaOptions}</select></span></div>`;
   $('envKv').innerHTML = [
     kvRow('SDK', env.sdk || '未探测到', env.sdk ? 'ok' : 'bad'),
     kvRow('adb', env.adbUsable ? env.adb : (env.adb || '未找到') + '(不可用)', env.adbUsable ? 'ok' : 'bad'),
     kvRow('JDK', env.javaHome ? `${env.javaHome}${env.javaVersion ? ' · ' + env.javaVersion : ''}` : '未探测到', env.javaHome ? 'ok' : 'bad'),
+    env.javaNote ? kvRow('JDK 说明', env.javaNote) : '',
+    jdkRow,
     kvRow('Gradle', `${env.gradleVersion ? 'v' + env.gradleVersion : '未知'} · ${env.task || ''}`)
   ].join('');
 
   updateButtons();
+}
+
+function jdkLabel(home) {
+  const parts = String(home || '').split(/[\\/]/).filter(Boolean);
+  const match = parts.filter((part) => /jdk|jbr|corretto|temurin|zulu|java/i.test(part)).pop();
+  return match || parts[parts.length - 1] || String(home || '');
 }
 
 function kvRow(key, value, cls) {
@@ -496,11 +520,13 @@ function updateButtons() {
   const ready = st ? st.devices.filter((d) => d.state === 'device') : [];
   // 多设备且未选择目标时,ar.js 无法决定装到哪台,先让用户选
   const ambiguous = ready.length > 1 && !currentSerial();
-  const deviceAction = hasProject && !ambiguous;
+  const flavorAmbiguous = !!(st && st.app && st.app.flavorAmbiguous);
+  const projectAction = hasProject && !flavorAmbiguous;
+  const deviceAction = projectAction && !ambiguous;
   const deviceAppAction = deviceAction && hasPkg;
   const set = (id, enabled) => { $(id).disabled = !enabled || busy; };
   set('act-run', deviceAction);
-  set('act-build', hasProject);
+  set('act-build', projectAction);
   set('act-install', deviceAction);
   set('act-launch', deviceAppAction);
   set('act-stop', deviceAppAction);
@@ -819,6 +845,25 @@ function wire() {
       setConsoleState('就绪');
     }
   };
+
+  // 环境区:切换本工程使用的 JDK(按工程记住,只影响本机)
+  $('envKv').addEventListener('change', async (event) => {
+    if (!event.target || event.target.id !== 'javaSelect') return;
+    const select = event.target;
+    const home = select.value;
+    select.disabled = true;
+    setConsoleState('切换 JDK…', true);
+    try {
+      const result = await callTool('panel_use_java', home ? { home } : { clear: true });
+      if (result && result.ok === false) throw new Error(result.output || '切换 JDK 失败');
+      await refreshStatus(true);
+      setConsoleState('就绪');
+    } catch (error) {
+      select.disabled = false;
+      setConsoleState('就绪');
+      showNotice('切换 JDK 失败:' + error.message);
+    }
+  });
 
   new ResizeObserver(() => reportSize()).observe(document.documentElement);
 }

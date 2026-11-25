@@ -326,6 +326,10 @@ async function collectStatus({ force = false } = {}) {
       javaHome: infoJson.javaHome || '',
       javaSource: infoJson.javaSource || '',
       javaVersion: infoJson.javaVersion || '',
+      javaCompatible: infoJson.javaCompatible !== false,
+      javaNote: infoJson.javaNote || '',
+      javaHomePreference: infoJson.javaHomePreference || '',
+      javaHomes: Array.isArray(infoJson.javaHomes) ? infoJson.javaHomes : [],
       gradleVersion: infoJson.gradleVersion || '',
       task: infoJson.task || ''
     },
@@ -333,6 +337,10 @@ async function collectStatus({ force = false } = {}) {
       packageName: infoJson.packageName || '',
       module: infoJson.module || 'app',
       variant: infoJson.variant || 'debug',
+      flavor: infoJson.flavor || '',
+      flavors: Array.isArray(infoJson.flavors) ? infoJson.flavors : [],
+      variantFull: infoJson.variantFull || '',
+      flavorAmbiguous: !!infoJson.flavorAmbiguous,
       apk: infoJson.apk || null
     }
   };
@@ -634,6 +642,21 @@ const TOOLS = [
     _meta: APP_VISIBILITY
   },
   {
+    name: 'panel_use_java',
+    description:
+      'Choose the JDK used for Gradle builds in this project, or reset to automatic selection. The choice is remembered per project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        home: { type: 'string', description: 'Absolute path to a JDK home (the directory containing bin/java).' },
+        clear: { type: 'boolean', description: 'Reset to automatic selection based on the Gradle version and project config.' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false },
+    _meta: APP_VISIBILITY
+  },
+  {
     name: 'panel_start_avd',
     description: 'Boot an Android emulator by AVD name and select it.',
     inputSchema: {
@@ -709,6 +732,18 @@ async function callTool(name, args = {}) {
       const project = await resolveProject();
       const job = startJobForAvd(args.name, project);
       return jsonResult({ jobId: job.id, action: 'start-avd' });
+    }
+    case 'panel_use_java': {
+      const project = await resolveProject();
+      const commandArgs = args.clear || !args.home
+        ? ['java', '--clear']
+        : ['java', String(args.home)];
+      const r = await runAr(commandArgs, project, { timeout: 60000 });
+      statusCache.at = 0;
+      return jsonResult(
+        { ok: r.code === 0, output: `${r.stdout}${r.stderr}`.trim() },
+        r.code !== 0
+      );
     }
     default:
       throw new Error(`未知工具:${name}`);

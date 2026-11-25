@@ -29,13 +29,20 @@ node scripts/ar.js logcat          # logcat, filtered to the app process
 
 | Item | Detection order |
 |---|---|
-| Project root | `gradlew` inside the current window's workspace (6 levels up, then downward scan) |
-| adb | `local.properties` → `ANDROID_HOME` → common SDK locations → `PATH` |
-| JDK | `.idea/gradle.xml` `gradleJvm` → `JAVA_HOME` → platform default |
+| Project root | find `gradlew` inside the current workspace (6 levels up / recursive down) |
+| adb | `local.properties` → `ANDROID_HOME` → common SDK dirs → `PATH` |
+| JDK | saved choice for this project → `org.gradle.java.home` → `.idea/gradle.xml` `gradleJvm` → `JAVA_HOME` → Android Studio JBR → system `java` → installed JDKs (picks one compatible with the Gradle version) |
+| Flavor | `productFlavors` in the module build file; defaults to `official` (else the only flavor / `dev`) |
 | Package name | `output-metadata.json` → module `build.gradle` `applicationId` |
-| APK | newest artifact under `build/outputs/apk/<variant>/` |
+| APK | newest artifact under `build/outputs/apk/<flavor>/<variant>/` (also reads AGP 3.x `output.json`) |
 
-Anything undetected can be passed explicitly: `--module`, `--variant`, `--apk`, `--package`, `--adb`, `--java-home`.
+Anything undetected can be passed explicitly: `--module`, `--variant`, `--flavor`, `--apk`, `--package`, `--adb`, `--java-home`.
+
+### JDK and flavors
+
+- **The JDK must match the Gradle version.** The plugin reads `gradle-wrapper.properties` and `gradle.properties` (e.g. a legacy `-XX:MaxPermSize` only works on Java 8) and auto-picks a compatible JDK, preferring the one configured by the project.
+- Pin one: `ar java <path or 17 / corretto-17>` (saved per project); `ar java --clear` restores auto; one-off with `--java-home` or `AR_JAVA_HOME`. The panel's environment section can switch it too.
+- Multi-channel projects (`channel.txt` + `productFlavors`) default to the `official` **debug** variant — runs and builds stay on debug and never build every channel at once. Pass `--flavor <name>` for one specific channel (still debug only). With several flavors and no `official`, the plugin asks you to choose.
 
 ## Side effects and safety
 
