@@ -343,6 +343,7 @@ async function collectStatus({ force = false } = {}) {
       variantFull: infoJson.variantFull || '',
       flavorAmbiguous: !!infoJson.flavorAmbiguous,
       flavorUnknown: !!infoJson.flavorUnknown,
+      task: infoJson.task || '',
       apk: infoJson.apk || null
     }
   };

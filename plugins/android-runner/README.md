@@ -8,7 +8,7 @@ Run Android projects from ZCode: a side panel with devices, build, install, laun
 
 - Device cards: model, serial, Android version, physical/emulator; click to switch the target device
 - Emulators: lists AVDs and boots one, waiting until it is ready (up to 180s)
-- App: package name, module/variant, APK size and build time
+- App: package name, module/variant, Flavor (dropdown or typed), **the exact Gradle task and mode (single-flavor debug / plain debug)**, APK size/time and full path
 - Environment: live SDK / adb / JDK / Gradle detection results
 - Actions: run (build → install → launch), build, install, launch, stop, restart, logcat, environment check, uninstall, clear data
 - Console: streamed output of build/install/launch; a second tab streams logcat

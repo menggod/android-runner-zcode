@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.5';
+const VERSION = '0.4.6';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
