@@ -71,7 +71,6 @@ function discoverFlavors(root, module) {
   if (!root) return [];
   const dir = moduleDirectory(root, module);
   const text = read(path.join(dir, 'build.gradle')) + '\n' + read(path.join(dir, 'build.gradle.kts'));
-  if (!text) return [];
   const names = new Set();
   const blockRe = /productFlavors\s*\{/g;
   let match;
@@ -84,6 +83,26 @@ function discoverFlavors(root, module) {
     }
     for (const item of block.matchAll(/(?:create|register|maybeCreate)\s*\(\s*['"]([\w]+)['"]/g)) names.add(item[1]);
   }
+  // 静态解析可能遇到循环/create(变量) 等动态写法:从已构建的输出目录反推 flavor
+  const apkRoot = path.join(dir, 'build', 'outputs', 'apk');
+  const skip = new Set(['debug', 'release', 'androidtest', 'test', 'rebuildchannel', 'channel', 'outputs']);
+  try {
+    for (const entry of fs.readdirSync(apkRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (skip.has(entry.name.toLowerCase())) continue;
+      let looksLikeFlavor = false;
+      try {
+        looksLikeFlavor = fs.readdirSync(path.join(apkRoot, entry.name), { withFileTypes: true })
+          .some((sub) => sub.isDirectory() && /^(debug|release)/i.test(sub.name));
+      } catch (_) { /* 空目录 */ }
+      if (!looksLikeFlavor) {
+        try {
+          looksLikeFlavor = fs.readdirSync(path.join(apkRoot, entry.name)).some((file) => /\.apk$/i.test(file));
+        } catch (_) { /* 忽略 */ }
+      }
+      if (looksLikeFlavor) names.add(entry.name);
+    }
+  } catch (_) { /* 还没有构建产物 */ }
   return Array.from(names).sort();
 }
 

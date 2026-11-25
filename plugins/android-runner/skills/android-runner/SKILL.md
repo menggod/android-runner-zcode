@@ -51,6 +51,7 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 - **JDK**:插件按 Gradle 版本自动选(读 wrapper / `org.gradle.java.home` / `.idea` / `JAVA_HOME`);用户想换时用 `ar java <路径|17>` 记住、`ar java --clear` 恢复自动,或单次 `--java-home`。编译失败先看 `ar doctor` 的 JDK 行。
 - **多渠道/Flavor**:像 `channel.txt` + `productFlavors` 的工程,默认只打 `official` 的 debug 包;运行/编译**始终 debug**,不会切 release,也绝不一次编所有渠道。需要特定渠道用 `--flavor <名字>`(仍是该渠道 debug)。APK 在 `outputs/apk/<flavor>/<variant>/`。解析不到 flavor 时宁可报错让你指定,也不会退回 `assembleDebug`。
 - **快捷指定**:面板「应用」区有 Flavor 下拉、「环境」区有 JDK 下拉;命令行用 `ar flavor <名字>` / `ar java <路径|版本>` 按工程记住;斜杠命令 `/android-flavor`、`/android-java`、`/android-run flavor=baidu`。
+- flavor 名称是动态生成、静态解析不到时,面板 Flavor 行仍可**直接输入**名字点「应用」;不要只提示用户去敲命令。
 
 退出码:0 成功;1 操作失败;2 环境问题;3 需要用户确认;130 被中断。
 

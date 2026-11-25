@@ -172,6 +172,13 @@
     font: inherit; font-size: 12px; background: var(--bg-2); color: var(--fg);
     border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; max-width: 100%;
   }
+  .flavor-edit { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .flavor-edit select { max-width: 120px; }
+  .flavor-edit input {
+    width: 104px; font: inherit; font-size: 12px; background: var(--bg-2); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-family: var(--mono);
+  }
+  .flavor-edit button { padding: 3px 9px; font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -263,7 +270,7 @@
  * ============================================================== */
 
 const SURFACE = 'android-runner';
-const VERSION = '0.4.3'; // 与 .zcode-plugin/plugin.json 保持一致
+const VERSION = '0.4.4'; // 与 .zcode-plugin/plugin.json 保持一致
 const PROTOCOL = '2026-01-26';
 
 const pending = new Map();
@@ -402,7 +409,9 @@ function render() {
     banner.textContent = '检测到多台在线设备,请先点设备卡片上的「设为当前」选择目标设备。';
   } else if (st.app && st.app.flavorAmbiguous) {
     banner.className = 'banner show warn';
-    banner.textContent = '工程有多个 productFlavor,请用命令行 --flavor <名字> 指定(开发调试通常选 official)。';
+    banner.textContent = (st.app.flavors || []).length
+      ? '工程有多个 productFlavor,请在下方「应用」区选择 Flavor 后运行。'
+      : '检测到 flavor 配置但未解析出名称,请在下方「应用」区输入 Flavor(如 official)后点「应用」。';
   } else {
     banner.className = 'banner';
   }
@@ -472,15 +481,22 @@ function render() {
   const flavorOptions = flavors
     .map((name) => `<option value="${esc(name)}"${name === flavorPref ? ' selected' : ''}>${esc(name)}</option>`)
     .join('');
-  const flavorRow = flavors.length > 1
-    ? `<div class="kv-row"><span class="kv-k">Flavor</span><span class="kv-v"><select id="flavorSelect" title="只影响 debug;不会一次编所有渠道"><option value=""${flavorPref ? '' : ' selected'}>自动(默认 official)</option>${flavorOptions}</select></span></div>`
+  const showFlavorRow = flavors.length > 0 || app.flavorAmbiguous || !!flavorPref;
+  const flavorRow = showFlavorRow
+    ? `<div class="kv-row"><span class="kv-k">Flavor</span><span class="kv-v"><span class="flavor-edit">
+        ${flavors.length ? `<select id="flavorSelect" title="只影响 debug;不会一次编所有渠道"><option value=""${flavorPref ? '' : ' selected'}>自动(默认 official)</option>${flavorOptions}</select>` : ''}
+        <input id="flavorInput" type="text" placeholder="${flavors.length ? '或输入其他' : '输入 flavor'}" value="${esc(flavorPref)}" />
+        <button id="flavorApply" title="按输入的 flavor 构建 debug">应用</button>
+      </span></span></div>`
     : '';
   $('appKv').innerHTML = [
     kvRow('包名', app.packageName || '未识别', app.packageName ? 'ok' : 'bad'),
     kvRow('模块 / 变体', `${app.module || 'app'} · ${app.variantFull || `${app.flavor ? app.flavor + ' ' : ''}${app.variant || 'debug'}`}`),
     flavorRow,
     app.flavorAmbiguous
-      ? kvRow('Flavor 提示', `多个:${flavors.join('、')} —— 先选一个再运行`, 'bad')
+      ? kvRow('Flavor 提示', flavors.length
+          ? `多个:${flavors.join('、')} —— 先选一个再运行`
+          : '未解析出 flavor 名称,请在上面输入(如 official)后点「应用」', 'bad')
       : '',
     apk
       ? kvRow('APK', `${esc(apk.name)} · ${fmtSize(apk.size)} · ${fmtAgo(apk.modifiedAt)}`)
@@ -875,11 +891,8 @@ function wire() {
   });
 
   // 应用区:切换 debug 使用的 flavor(只影响本机本工程)
-  $('appKv').addEventListener('change', async (event) => {
-    if (!event.target || event.target.id !== 'flavorSelect') return;
-    const select = event.target;
-    const name = select.value;
-    select.disabled = true;
+  const applyFlavor = async (name, control) => {
+    if (control) control.disabled = true;
     setConsoleState('切换 flavor…', true);
     try {
       const result = await callTool('panel_use_flavor', name ? { name } : { clear: true });
@@ -887,10 +900,24 @@ function wire() {
       await refreshStatus(true);
       setConsoleState('就绪');
     } catch (error) {
-      select.disabled = false;
+      if (control) control.disabled = false;
       setConsoleState('就绪');
       showNotice('切换 flavor 失败:' + error.message);
     }
+  };
+  $('appKv').addEventListener('change', (event) => {
+    if (!event.target || event.target.id !== 'flavorSelect') return;
+    applyFlavor(event.target.value, event.target);
+  });
+  $('appKv').addEventListener('click', (event) => {
+    if (!event.target || event.target.id !== 'flavorApply') return;
+    const input = $('flavorInput');
+    applyFlavor(input ? input.value.trim() : '', event.target);
+  });
+  $('appKv').addEventListener('keydown', (event) => {
+    if (!event.target || event.target.id !== 'flavorInput' || event.key !== 'Enter') return;
+    event.preventDefault();
+    applyFlavor(event.target.value.trim(), $('flavorApply'));
   });
 
   new ResizeObserver(() => reportSize()).observe(document.documentElement);

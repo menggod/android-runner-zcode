@@ -44,6 +44,7 @@ node scripts/ar.js logcat          # 只看本应用进程的日志
 - 想固定用某个 JDK:`ar java <路径 或 17 / corretto-17>`(按工程记住);`ar java --clear` 恢复自动;单次可用 `--java-home` 或环境变量 `AR_JAVA_HOME`。面板「环境」区也能切换。 也可以用 `/android-java` 快捷命令。
 - 多渠道工程(`channel.txt` + `productFlavors`)默认打 `official` 的 debug 包,**运行/编译始终是 debug**,不会切 release,也不会一次编所有渠道;需要某渠道时加 `--flavor <名字>`(仍然只编该渠道的 debug)。多 flavor 且没有 `official` 时会提示你先选。
 - 想固定某个渠道:`ar flavor <名字>`(按工程记住,`ar flavor --clear` 恢复自动),或面板「应用」区的 Flavor 下拉、`/android-flavor` 命令;单次用 `--flavor <名字>`。
+- 面板「应用」区的 Flavor 支持**下拉选择 + 直接输入**:静态解析不到动态 flavor 时,输入名字点「应用」即可(也支持 `/android-flavor 名字`)。
 
 ## 副作用与安全
 

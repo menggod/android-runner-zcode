@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.3';
+const VERSION = '0.4.4';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -265,14 +265,15 @@ function availableFlavors() {
   return discoverFlavors(projectRoot(), module());
 }
 
-/** 工程记住的 flavor(用户显式选择过才存在)。 */
+/** 工程记住的 flavor(用户显式选择/输入过才存在)。 */
 function flavorPreference() {
   const pref = projectStoreEntry();
   const name = pref && typeof pref.flavor === 'string' ? pref.flavor.trim() : '';
   if (!name) return null;
+  // 静态解析可能漏掉动态 flavor:记住的名字一律保留,大小写能对上就归一
   const flavors = availableFlavors();
-  if (flavors.length && !flavors.includes(name)) return null;
-  return name;
+  const matched = flavors.find((item) => item.toLowerCase() === name.toLowerCase());
+  return matched || name;
 }
 
 function rememberFlavor(name) {
@@ -301,7 +302,11 @@ function clearFlavor() {
  */
 function flavor() {
   const explicit = (opts.flavor || '').trim();
-  if (explicit) return explicit;
+  if (explicit) {
+    const flavors = availableFlavors();
+    const matched = flavors.find((item) => item.toLowerCase() === explicit.toLowerCase());
+    return matched || explicit;
+  }
   const stored = flavorPreference();
   if (stored) return stored;
   const flavors = availableFlavors();
@@ -1728,11 +1733,13 @@ async function cmdFlavor() {
   }
   const requested = (opts.flavor || '').trim();
   if (requested) {
-    if (flavors.length && !flavors.includes(requested)) {
-      throw new CliError(EXIT.ENV, `没有这个 flavor:${requested}\n可用:${flavors.join('、')}`);
+    // 动态生成的 flavor 可能解析不到:允许直接输入,以 Gradle 的 task 为准
+    const canonical = flavors.find((item) => item.toLowerCase() === requested.toLowerCase()) || requested;
+    if (flavors.length && !flavors.includes(canonical)) {
+      console.log(`⚠ 静态解析没找到 ${requested},仍按这个名字构建;若 Gradle 报 task 不存在,请检查拼写`);
     }
-    rememberFlavor(requested);
-    console.log(`已记住本工程的 flavor:${requested}(构建任务 ${gradleTaskFor()})`);
+    rememberFlavor(canonical);
+    console.log(`已记住本工程的 flavor:${canonical}(构建任务 ${gradleTaskFor()})`);
     return;
   }
   console.log(`工程        : ${root}`);
