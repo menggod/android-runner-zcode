@@ -338,6 +338,7 @@ async function collectStatus({ force = false } = {}) {
       module: infoJson.module || 'app',
       variant: infoJson.variant || 'debug',
       flavor: infoJson.flavor || '',
+      flavorPreference: infoJson.flavorPreference || '',
       flavors: Array.isArray(infoJson.flavors) ? infoJson.flavors : [],
       variantFull: infoJson.variantFull || '',
       flavorAmbiguous: !!infoJson.flavorAmbiguous,
@@ -642,6 +643,21 @@ const TOOLS = [
     _meta: APP_VISIBILITY
   },
   {
+    name: 'panel_use_flavor',
+    description:
+      'Choose the productFlavor used for debug builds in this project, or reset to automatic selection (official when present). Runs and builds always stay on debug.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'productFlavor name, e.g. official or baidu.' },
+        clear: { type: 'boolean', description: 'Reset to automatic selection.' }
+      },
+      additionalProperties: false
+    },
+    annotations: { readOnlyHint: false },
+    _meta: APP_VISIBILITY
+  },
+  {
     name: 'panel_use_java',
     description:
       'Choose the JDK used for Gradle builds in this project, or reset to automatic selection. The choice is remembered per project.',
@@ -732,6 +748,18 @@ async function callTool(name, args = {}) {
       const project = await resolveProject();
       const job = startJobForAvd(args.name, project);
       return jsonResult({ jobId: job.id, action: 'start-avd' });
+    }
+    case 'panel_use_flavor': {
+      const project = await resolveProject();
+      const commandArgs = args.clear || !args.name
+        ? ['flavor', '--clear']
+        : ['flavor', String(args.name)];
+      const r = await runAr(commandArgs, project, { timeout: 60000 });
+      statusCache.at = 0;
+      return jsonResult(
+        { ok: r.code === 0, output: `${r.stdout}${r.stderr}`.trim() },
+        r.code !== 0
+      );
     }
     case 'panel_use_java': {
       const project = await resolveProject();

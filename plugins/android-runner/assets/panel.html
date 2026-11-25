@@ -263,7 +263,7 @@
  * ============================================================== */
 
 const SURFACE = 'android-runner';
-const VERSION = '0.4.2'; // 与 .zcode-plugin/plugin.json 保持一致
+const VERSION = '0.4.3'; // 与 .zcode-plugin/plugin.json 保持一致
 const PROTOCOL = '2026-01-26';
 
 const pending = new Map();
@@ -467,11 +467,20 @@ function render() {
   // 应用
   const app = st.app || {};
   const apk = app.apk;
+  const flavors = app.flavors || [];
+  const flavorPref = app.flavorPreference || '';
+  const flavorOptions = flavors
+    .map((name) => `<option value="${esc(name)}"${name === flavorPref ? ' selected' : ''}>${esc(name)}</option>`)
+    .join('');
+  const flavorRow = flavors.length > 1
+    ? `<div class="kv-row"><span class="kv-k">Flavor</span><span class="kv-v"><select id="flavorSelect" title="只影响 debug;不会一次编所有渠道"><option value=""${flavorPref ? '' : ' selected'}>自动(默认 official)</option>${flavorOptions}</select></span></div>`
+    : '';
   $('appKv').innerHTML = [
     kvRow('包名', app.packageName || '未识别', app.packageName ? 'ok' : 'bad'),
     kvRow('模块 / 变体', `${app.module || 'app'} · ${app.variantFull || `${app.flavor ? app.flavor + ' ' : ''}${app.variant || 'debug'}`}`),
+    flavorRow,
     app.flavorAmbiguous
-      ? kvRow('Flavor', `多个:${(app.flavors || []).join('、')} —— 需用 --flavor 指定`, 'bad')
+      ? kvRow('Flavor 提示', `多个:${flavors.join('、')} —— 先选一个再运行`, 'bad')
       : '',
     apk
       ? kvRow('APK', `${esc(apk.name)} · ${fmtSize(apk.size)} · ${fmtAgo(apk.modifiedAt)}`)
@@ -862,6 +871,25 @@ function wire() {
       select.disabled = false;
       setConsoleState('就绪');
       showNotice('切换 JDK 失败:' + error.message);
+    }
+  });
+
+  // 应用区:切换 debug 使用的 flavor(只影响本机本工程)
+  $('appKv').addEventListener('change', async (event) => {
+    if (!event.target || event.target.id !== 'flavorSelect') return;
+    const select = event.target;
+    const name = select.value;
+    select.disabled = true;
+    setConsoleState('切换 flavor…', true);
+    try {
+      const result = await callTool('panel_use_flavor', name ? { name } : { clear: true });
+      if (result && result.ok === false) throw new Error(result.output || '切换 flavor 失败');
+      await refreshStatus(true);
+      setConsoleState('就绪');
+    } catch (error) {
+      select.disabled = false;
+      setConsoleState('就绪');
+      showNotice('切换 flavor 失败:' + error.message);
     }
   });
 

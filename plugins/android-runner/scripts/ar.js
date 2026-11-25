@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.2';
+const VERSION = '0.4.3';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -60,6 +60,7 @@ function printHelp() {
   clear-data             清除应用数据(破坏性,需 --yes)
   logcat                 查看设备日志(优先只看本应用进程,前台持续输出)
   java [路径|版本]       查看/记住本工程使用的 JDK(--clear 恢复按 Gradle 自动选择)
+  flavor [名字]          查看/记住本工程的 productFlavor(--clear 恢复自动,默认 official)
   dashboard              生成图形化状态面板(HTML,--open 自动在浏览器打开)
 
 通用参数:
@@ -141,6 +142,9 @@ try {
   if (command === 'java' && positionals.length) {
     opts.javaPath = positionals.shift();
   }
+  if (command === 'flavor' && positionals.length) {
+    opts.flavor = positionals.shift();
+  }
   if (positionals.length) {
     throw new CliError(EXIT.ENV, `多余的参数:${positionals.join(' ')}\n运行 node ar.js --help 查看用法`);
   }
@@ -153,7 +157,7 @@ try {
   throw e;
 }
 
-const COMMANDS = ['doctor', 'devices', 'use', 'java', 'info', 'build', 'install', 'run', 'launch', 'stop', 'restart', 'uninstall', 'clear-data', 'logcat', 'dashboard'];
+const COMMANDS = ['doctor', 'devices', 'use', 'java', 'flavor', 'info', 'build', 'install', 'run', 'launch', 'stop', 'restart', 'uninstall', 'clear-data', 'logcat', 'dashboard'];
 if (!COMMANDS.includes(command)) {
   console.error(`未知命令:${command || '(缺省)'}\n可用命令:${COMMANDS.join(' ')}\n运行 node ar.js --help 查看用法`);
   process.exit(EXIT.ENV);
@@ -261,13 +265,45 @@ function availableFlavors() {
   return discoverFlavors(projectRoot(), module());
 }
 
+/** 工程记住的 flavor(用户显式选择过才存在)。 */
+function flavorPreference() {
+  const pref = projectStoreEntry();
+  const name = pref && typeof pref.flavor === 'string' ? pref.flavor.trim() : '';
+  if (!name) return null;
+  const flavors = availableFlavors();
+  if (flavors.length && !flavors.includes(name)) return null;
+  return name;
+}
+
+function rememberFlavor(name) {
+  const root = projectRoot();
+  if (!root) {
+    throw new CliError(EXIT.ENV, '当前目录不在 Gradle 工程内,无法记住 flavor\n请先 cd 到工程根目录');
+  }
+  const all = readStore();
+  all[root] = Object.assign({}, all[root], { flavor: name, at: Date.now() });
+  writeStore(all);
+}
+
+function clearFlavor() {
+  const root = projectRoot();
+  if (!root) return;
+  const all = readStore();
+  if (!all[root] || !all[root].flavor) return;
+  delete all[root].flavor;
+  if (Object.keys(all[root]).length) writeStore(all);
+  else { delete all[root]; writeStore(all); }
+}
+
 /**
  * 当前使用的 productFlavor。
- * 开发调试通常不需要渠道:优先 official,其次唯一 flavor / dev;都没有就留空。
+ * 开发调试通常不需要渠道:显式指定 > 工程记住 > official > 唯一 flavor / dev。
  */
 function flavor() {
   const explicit = (opts.flavor || '').trim();
   if (explicit) return explicit;
+  const stored = flavorPreference();
+  if (stored) return stored;
   const flavors = availableFlavors();
   if (!flavors.length) return '';
   if (flavors.length === 1) return flavors[0];
@@ -1677,6 +1713,39 @@ async function cmdJava() {
   console.log('选择:node ar.js java <路径 或 17 / corretto-17>    恢复自动:node ar.js java --clear');
 }
 
+/**
+ * 查看 / 记住本工程的 productFlavor。
+ * 不指定参数时列出可用 flavor;指定名字则记住,`--clear` 恢复自动(默认 official)。
+ */
+async function cmdFlavor() {
+  requireProjectRoot();
+  const root = projectRoot();
+  const flavors = availableFlavors();
+  if (opts.clear) {
+    clearFlavor();
+    console.log(`已恢复自动选择 flavor(当前:${flavor() || '(无)'})`);
+    return;
+  }
+  const requested = (opts.flavor || '').trim();
+  if (requested) {
+    if (flavors.length && !flavors.includes(requested)) {
+      throw new CliError(EXIT.ENV, `没有这个 flavor:${requested}\n可用:${flavors.join('、')}`);
+    }
+    rememberFlavor(requested);
+    console.log(`已记住本工程的 flavor:${requested}(构建任务 ${gradleTaskFor()})`);
+    return;
+  }
+  console.log(`工程        : ${root}`);
+  console.log(`Gradle      : ${gradleVersionFromWrapper() || '(未知)'} · variant=${variant()}(运行固定 debug)`);
+  console.log(`当前 flavor : ${flavor() || '(无)'}${flavorPreference() ? '(本工程记住)' : '(自动)'}`);
+  console.log(`可用 flavor : ${flavors.join('、') || '(未配置)'}`);
+  if (flavors.length > 1 && !flavor()) {
+    console.log('⚠ 多个 flavor 且没有 official:请用 node ar.js flavor <名字> 指定,避免一次编译所有渠道');
+  }
+  console.log('');
+  console.log('选择:node ar.js flavor <名字>    恢复自动:node ar.js flavor --clear');
+}
+
 async function cmdInfo() {
   const root = projectRoot();
   if (!root) {
@@ -1710,6 +1779,7 @@ async function cmdInfo() {
     module: module(),
     variant: variant(),
     flavor: flavor(),
+    flavorPreference: flavorPreference() || '',
     flavors: availableFlavors(),
     variantFull: fullVariant(),
     flavorAmbiguous: flavorUnresolved(),
@@ -2070,6 +2140,7 @@ const IMPL = {
   devices: cmdDevices,
   use: cmdUse,
   java: cmdJava,
+  flavor: cmdFlavor,
   info: cmdInfo,
   build: cmdBuild,
   install: cmdInstall,

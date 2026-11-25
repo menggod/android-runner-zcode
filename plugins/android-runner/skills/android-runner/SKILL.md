@@ -39,6 +39,7 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 | `uninstall` / `clear-data` | 卸载 / 清数据(**破坏性**) |
 | `logcat` | 持续输出,优先只看本应用进程 |
 | `java [路径\|版本]` | 查看/记住本工程使用的 JDK(`--clear` 恢复自动) |
+| `flavor [名字]` | 查看/记住本工程的 productFlavor(`--clear` 恢复自动,默认 official) |
 | `doctor` | 环境自检报告 |
 | `info [--json]` | 工程探测结果 |
 | `dashboard [--open]` | 生成静态 HTML 面板(面板不可用时的浏览器兜底) |
@@ -49,6 +50,7 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 - 安装/启动/停止/日志需要唯一目标设备:多台在线且无偏好时会报错,先 `ar use <serial>` 或让用户点面板「设为当前」。
 - **JDK**:插件按 Gradle 版本自动选(读 wrapper / `org.gradle.java.home` / `.idea` / `JAVA_HOME`);用户想换时用 `ar java <路径|17>` 记住、`ar java --clear` 恢复自动,或单次 `--java-home`。编译失败先看 `ar doctor` 的 JDK 行。
 - **多渠道/Flavor**:像 `channel.txt` + `productFlavors` 的工程,默认只打 `official` 的 debug 包;运行/编译**始终 debug**,不会切 release,也绝不一次编所有渠道。需要特定渠道用 `--flavor <名字>`(仍是该渠道 debug)。APK 在 `outputs/apk/<flavor>/<variant>/`。解析不到 flavor 时宁可报错让你指定,也不会退回 `assembleDebug`。
+- **快捷指定**:面板「应用」区有 Flavor 下拉、「环境」区有 JDK 下拉;命令行用 `ar flavor <名字>` / `ar java <路径|版本>` 按工程记住;斜杠命令 `/android-flavor`、`/android-java`、`/android-run flavor=baidu`。
 
 退出码:0 成功;1 操作失败;2 环境问题;3 需要用户确认;130 被中断。
 
