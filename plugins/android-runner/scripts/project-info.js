@@ -83,7 +83,10 @@ function findApk(root, module, variant, explicit) {
   const dir = path.join(base, variant);
   try {
     const apks = fs.readdirSync(dir).filter((file) => /\.apk$/i.test(file)).map((file) => path.join(dir, file));
-    apks.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    const mtime = (file) => {
+      try { return fs.statSync(file).mtimeMs; } catch (_) { return 0; }
+    };
+    apks.sort((a, b) => mtime(b) - mtime(a));
     if (apks.length) return { path: apks[0], applicationId: '' };
   } catch (_) { /* missing output */ }
   return { path: path.join(dir, module.split(':').pop() + '-' + variant + '.apk'), applicationId: '' };

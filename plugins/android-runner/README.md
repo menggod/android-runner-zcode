@@ -41,8 +41,9 @@ Anything undetected can be passed explicitly: `--module`, `--variant`, `--apk`, 
 
 - **Command execution**: runs the project's own `gradlew` and `adb` on the local machine. No network access of its own.
 - **File writes**: may create `local.properties` when missing (contains `sdk.dir`); remembers device/project choices in `~/.android-runner/`.
-- **Destructive**: on signature mismatch or version downgrade, install **uninstalls and reinstalls automatically**, wiping the app's local data. Opt out with `--no-reinstall`.
+- **Destructive**: on signature mismatch or version downgrade, install **uninstalls and reinstalls automatically**, wiping the app's local data. Opt out with `--no-reinstall`; `--reinstall` opts back in and wins over `--no-reinstall`. Before uninstalling it verifies the package actually installed on the device, so `applicationIdSuffix` builds are handled.
 - `uninstall` / `clear-data` are destructive: the panel asks for confirmation, the CLI requires an explicit `--yes`.
+- **Multiple devices**: with more than one online device and no target selected, the panel asks you to pick one and disables install/launch-style actions. `build` is unaffected and never needs a device.
 - **MCP server**: a local stdio server (`scripts/mcp-server.mjs`) serving the panel and running the CLI. It binds no ports.
 
 ## Requirements

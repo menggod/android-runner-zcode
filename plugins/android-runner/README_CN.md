@@ -41,8 +41,9 @@ node scripts/ar.js logcat          # 只看本应用进程的日志
 
 - **命令执行**:在本机运行工程自己的 `gradlew` 和 `adb`,插件自身不联网。
 - **文件写入**:缺少 `local.properties` 时可能自动创建(写入 `sdk.dir`);在 `~/.android-runner/` 记住设备与工程选择。
-- **破坏性**:签名不一致或版本回退时,安装会**自动卸载重装**,并清空该应用的本地数据。可用 `--no-reinstall` 关闭。
+- **破坏性**:签名不一致或版本回退时,安装会**自动卸载重装**,并清空该应用的本地数据。可用 `--no-reinstall` 关闭,`--reinstall` 显式允许(优先于 `--no-reinstall`)。卸载前会核对设备上实际安装的包名,兼容 `applicationIdSuffix`。
 - `uninstall` / `clear-data` 属破坏性操作:面板里会二次确认,命令行需要显式 `--yes`。
+- **多设备**:同时连接多台设备且未选择目标时,面板会提示先「设为当前」,安装/启动类操作暂不可用;`build` 不受影响,无需选择设备。
 - **MCP 服务器**:本地 stdio 服务(`scripts/mcp-server.mjs`),承载面板并执行命令,不监听任何端口。
 
 ## 要求

@@ -42,7 +42,10 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 | `info [--json]` | 工程探测结果 |
 | `dashboard [--open]` | 生成静态 HTML 面板(面板不可用时的浏览器兜底) |
 
-通用参数:`--module`(默认 app)、`--variant`(默认 debug)、`--task`、`--apk`、`--package`、`--serial`、`--adb`、`--java-home`、`--no-reinstall`;`--` 之后透传给 Gradle(如 `ar build -- --info`)。
+通用参数:`--module`(默认 app)、`--variant`(默认 debug)、`--task`、`--apk`、`--package`、`--serial`、`--adb`、`--java-home`、`--reinstall`、`--no-reinstall`;`--` 之后透传给 Gradle(如 `ar build -- --info`)。
+
+- `build` **不需要设备**:没设备、设备未授权、多设备未选择时都能正常编译,不要为了编译先让用户选设备。
+- 安装/启动/停止/日志需要唯一目标设备:多台在线且无偏好时会报错,先 `ar use <serial>` 或让用户点面板「设为当前」。
 
 退出码:0 成功;1 操作失败;2 环境问题;3 需要用户确认;130 被中断。
 
@@ -56,7 +59,7 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 
 ## 4. 安全政策(必须遵守)
 
-- **安装会自动替换**:`install` / `run` 遇到签名不一致或版本回退时,会**自动卸载重装**,并清空该应用在设备上的本地数据(登录态等)。这是默认行为 —— **执行后必须主动告知用户"已自动卸载重装,本地数据被清空"**,不要静默略过。需要临时关闭时加 `--no-reinstall`(此时以退出码 3 报错)。
+- **安装会自动替换**:`install` / `run` 遇到签名不一致或版本回退时,会**自动卸载重装**,并清空该应用在设备上的本地数据(登录态等)。这是默认行为 —— **执行后必须主动告知用户"已自动卸载重装,本地数据被清空"**,不要静默略过。需要临时关闭时加 `--no-reinstall`(此时以退出码 3 报错);`--reinstall` 显式允许,优先于 `--no-reinstall`。卸载前脚本会核对设备上实际安装的包名(兼容 `applicationIdSuffix`,如 `com.foo.debug`)。
 - `uninstall` / `clear-data` 仍属高破坏性操作:**先说明后果并征得用户同意**;面板里点这些按钮会弹确认框,你代为执行命令行时必须在用户同意后加 `--yes`。
 - 多台设备时不要替用户选,列出清单让用户挑(或在面板里让他点)。
 - logcat 可能含隐私信息,汇报时只摘录相关行。

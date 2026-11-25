@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.1.0';
+const VERSION = '0.4.1';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -70,7 +70,7 @@ function printHelp() {
   --serial <序列号>      本次操作的目标设备
   --adb <路径>           指定 adb 路径(默认自动探测)
   --java-home <路径>     指定 JAVA_HOME(默认自动探测)
-  --reinstall            兼容旧参数(签名不一致时默认就会自动卸载重装)
+  --reinstall            显式允许签名不一致时自动卸载重装(覆盖 --no-reinstall)
   --no-reinstall         关闭自动替换:签名不一致/版本回退时直接报错退出(exit 3)
   --yes / -y             确认破坏性操作(uninstall / clear-data)
   --no-local-properties  不自动生成 local.properties
@@ -331,7 +331,13 @@ function javaHomeForVersion(version) {
   ];
   for (const dir of roots) {
     if (!fs.existsSync(dir)) continue;
-    for (const name of fs.readdirSync(dir)) {
+    let names = [];
+    try {
+      names = fs.readdirSync(dir);
+    } catch (e) {
+      continue;
+    }
+    for (const name of names) {
       const home = path.join(dir, name, 'Contents', 'Home');
       if (name.indexOf(version) !== -1 && fs.existsSync(home)) return home;
     }
@@ -549,8 +555,17 @@ function readStore() {
 }
 
 function writeStore(data) {
-  fs.mkdirSync(path.dirname(storeFile()), { recursive: true });
-  fs.writeFileSync(storeFile(), JSON.stringify(data, null, 2), 'utf8');
+  const file = storeFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // 面板与命令行可能同时写偏好;先写临时文件再改名,避免读到半截 JSON
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch (e2) { /* 临时文件可能未创建 */ }
+    throw e;
+  }
 }
 
 function devicePreference() {
@@ -805,6 +820,35 @@ async function runInstall(adb, serial, apk, extraArgs) {
   return { ok: r.ok && /Success/i.test(text), text, seconds };
 }
 
+/** 读取设备上已安装的包名列表;失败时返回 null(不阻断后续流程)。 */
+async function installedPackages(device) {
+  const r = await execFileP(detectAdb(), ['-s', device.serial, 'shell', 'pm', 'list', 'packages'], { timeout: 15000 });
+  if (!r.ok) return null;
+  return r.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('package:'))
+    .map((line) => line.slice('package:'.length).trim())
+    .filter(Boolean);
+}
+
+/**
+ * 卸载重装前确认要卸载的包确实在设备上。
+ * build.gradle 里只有 applicationId、没有 applicationIdSuffix 时,实际安装的是
+ * `<applicationId>.debug` 之类;直接按 applicationId 卸载会失败,重装也仍然失败。
+ */
+async function resolveInstalledPackage(device, pkg) {
+  if (!pkg) return pkg;
+  const installed = await installedPackages(device);
+  if (!installed || installed.includes(pkg)) return pkg;
+  const suffixed = installed.filter((name) => name.startsWith(`${pkg}.`));
+  if (suffixed.length === 1) {
+    console.log(`  设备上的实际包名是 ${suffixed[0]}(applicationIdSuffix),按该包名处理`);
+    return suffixed[0];
+  }
+  return pkg;
+}
+
 async function installApk(device, { quiet = false } = {}) {
   const adb = detectAdb();
   const apk = resolveApk();
@@ -838,17 +882,21 @@ async function installApk(device, { quiet = false } = {}) {
   }
 
   if (/INSTALL_FAILED_UPDATE_INCOMPATIBLE|signatures do not match|INSTALL_FAILED_VERSION_DOWNGRADE/i.test(result.text)) {
-    const pkg = resolvePackage();
-    if (opts.noReinstall) {
+    // --reinstall 显式允许替换,优先级高于 --no-reinstall;两者都没给时默认允许(与旧版一致)
+    const allowReinstall = opts.reinstall || !opts.noReinstall;
+    if (!allowReinstall) {
       throw new CliError(
         EXIT.CONFIRM,
         `安装被拒绝(签名不一致或版本回退),当前已关闭自动替换。\n` +
-          `去掉 --no-reinstall 后重试,即会自动卸载重装(会清空${pkg ? ' ' + pkg : ''}的本地数据)`
+          `去掉 --no-reinstall 后重试,即会自动卸载重装(会清空应用在设备上的本地数据)`
       );
     }
+    const declared = resolvePackage();
+    const pkg = await resolveInstalledPackage(device, declared);
     if (!pkg) {
       throw new CliError(EXIT.FAIL, '安装被拒绝且未能识别包名,无法自动卸载重装;可用 --package 指定包名');
     }
+    if (declared !== pkg) console.log(`  提示:声明的 applicationId 是 ${declared}`);
     console.log(`⚠ 签名不一致或版本回退 → 自动卸载重装(会清空 ${pkg} 在设备上的本地数据)`);
     const un = await execFileP(adb, ['-s', device.serial, 'uninstall', pkg], { timeout: 60000 });
     if (!un.ok && !/Unknown package|not installed/i.test(`${un.stdout}${un.stderr}`)) {
@@ -904,40 +952,54 @@ async function launchApp(device) {
   return ok;
 }
 
-async function isAppRunning(device, pkg) {
-  const r = await execFileP(detectAdb(), ['-s', device.serial, 'shell', 'pidof', pkg], { timeout: 5000 });
-  return r.ok && !!r.stdout.trim();
-}
-
+/**
+ * 前台持续输出日志,直到 Ctrl-C 或流结束。
+ * 返回 Promise:入口不能在启动流之后立刻 process.exit,否则 adb logcat 会被一起带走。
+ */
 function openLogcat(device) {
   const adb = detectAdb();
   const pkg = resolvePackage();
   const args = ['-s', device.serial, 'logcat', '-v', 'time'];
   console.log(`▶ adb ${args.join(' ')}${pkg ? `(优先只看 ${pkg} 的进程,Ctrl-C 停止)` : '(Ctrl-C 停止)'}`);
-  const start = (extra) => {
-    const child = cp.spawn(adb, args.concat(extra || []), { stdio: 'inherit', windowsHide: true });
-    const onSignal = () => {
-      try { child.kill('SIGKILL'); } catch (e) { /* 可能已结束 */ }
-      process.exit(EXIT.OK);
+  return new Promise((resolve) => {
+    let finished = false;
+    const start = (extra) => {
+      const child = cp.spawn(adb, args.concat(extra || []), { stdio: 'inherit', windowsHide: true });
+      const onSignal = () => {
+        try { child.kill('SIGKILL'); } catch (e) { /* 可能已结束 */ }
+        process.exit(EXIT.OK);
+      };
+      process.on('SIGINT', onSignal);
+      process.on('SIGTERM', onSignal);
+      const finish = (code) => {
+        if (finished) return;
+        finished = true;
+        process.removeListener('SIGINT', onSignal);
+        process.removeListener('SIGTERM', onSignal);
+        resolve(code);
+      };
+      child.on('error', (error) => {
+        console.error(`启动 adb logcat 失败:${error.message}`);
+        finish(EXIT.FAIL);
+      });
+      // Ctrl-C 由上面的信号处理负责;正常结束(设备断开等)也返回成功
+      child.on('close', () => finish(EXIT.OK));
     };
-    process.on('SIGINT', onSignal);
-    process.on('SIGTERM', onSignal);
-    child.on('close', () => process.exit(EXIT.OK));
-  };
-  if (!pkg) {
-    start();
-    return;
-  }
-  // 优先只看本应用进程;多进程时取第一个 pid;拿不到 pid 时回落全量日志
-  execFileP(adb, ['-s', device.serial, 'shell', 'pidof', pkg], { timeout: 5000 }).then((r) => {
-    const pid = (r.stdout || '').trim().split(/\s+/)[0];
-    if (pid && /^\d+$/.test(pid)) {
-      console.log(`  进程 ${pkg} pid=${pid}`);
-      start([`--pid=${pid}`]);
-    } else {
-      console.log(`  未取到 ${pkg} 的 pid(App 未运行?),输出全量日志`);
+    if (!pkg) {
       start();
+      return;
     }
+    // 优先只看本应用进程;多进程时取第一个 pid;拿不到 pid 时回落全量日志
+    execFileP(adb, ['-s', device.serial, 'shell', 'pidof', pkg], { timeout: 5000 }).then((r) => {
+      const pid = (r.stdout || '').trim().split(/\s+/)[0];
+      if (pid && /^\d+$/.test(pid)) {
+        console.log(`  进程 ${pkg} pid=${pid}`);
+        start([`--pid=${pid}`]);
+      } else {
+        console.log(`  未取到 ${pkg} 的 pid(App 未运行?),输出全量日志`);
+        start();
+      }
+    });
   });
 }
 
@@ -971,10 +1033,15 @@ async function startAvd(name) {
   if (!existing) {
     console.log(`▶ ${path.basename(emu)} -avd ${name}`);
     const proc = cp.spawn(emu, ['-avd', name], { detached: true, stdio: 'ignore' });
-    proc.once('error', (error) => {
-      throw new CliError(EXIT.FAIL, `启动模拟器失败:${error.message}`);
+    // spawn 失败是异步事件;在事件回调里 throw 会变成未捕获异常,这里收集后统一报错
+    const spawnError = await new Promise((resolve) => {
+      proc.once('spawn', () => resolve(null));
+      proc.once('error', (error) => resolve(error));
     });
     proc.unref();
+    if (spawnError) {
+      throw new CliError(EXIT.FAIL, `启动模拟器失败:${spawnError.message}`);
+    }
   }
 
   const deadline = Date.now() + 180000;
@@ -1066,7 +1133,6 @@ async function cmdDoctor() {
   console.log('══════════════════════════════════════');
 
   const problems = [];
-  if (!root) problems.push('找到 Gradle 工程根目录');
   if (!sdk) problems.push('探测 Android SDK');
   if (!adbUsable) problems.push('探测 adb');
   if (!javaDetail.home) problems.push('探测 JDK');
@@ -1079,11 +1145,11 @@ async function cmdDoctor() {
   console.log('✅ 环境自检通过:工程、SDK、JDK、adb、设备均就绪');
 }
 
-/** 按终端显示宽度补齐(中文占 2 格),用于自检报告对齐。 */
+/** 按终端显示宽度补齐(非 ASCII 占 2 格),用于自检报告对齐。 */
 function padLabel(text, width) {
   let w = 0;
   for (const ch of text) {
-    w += /[一-龥():,]/.test(ch) ? 2 : 1;
+    w += /[^\x00-\xff]/.test(ch) ? 2 : 1;
   }
   return text + ' '.repeat(Math.max(0, width - w));
 }
@@ -1166,7 +1232,7 @@ async function cmdUse() {
   if (opts.emulator) {
     const device = await startAvd(opts.emulator);
     rememberDevice(device);
-    console.log(`已记住目标设备:${device.serial}(工程:${projectRoot()})`);
+    console.log(`已记住目标设备:${device.serial}${projectRoot() ? `(工程:${projectRoot()})` : '(当前目录不在 Gradle 工程内,仅本次会话有效)'}`);
     return;
   }
   if (opts.clear) {
@@ -1195,7 +1261,7 @@ async function cmdUse() {
   }
   const model = await resolveModel(device);
   rememberDevice({ serial: device.serial, model: model || device.model });
-  console.log(`已记住目标设备:${device.serial}${model ? ' · ' + model : ''}(工程:${projectRoot()})`);
+  console.log(`已记住目标设备:${device.serial}${model ? ' · ' + model : ''}${projectRoot() ? `(工程:${projectRoot()})` : '(当前目录不在 Gradle 工程内,仅本次会话有效)'}`);
 }
 
 async function cmdInfo() {
@@ -1239,14 +1305,17 @@ async function cmdInfo() {
 
 async function cmdBuild() {
   requireProjectRoot();
-  const device = await pickDevice().catch((e) => {
-    // 仅编译不强制要求设备;无设备时照常编译
-    if (e.code === EXIT.ENV && /没有检测到设备|未授权|offline/.test(e.message)) {
+  // 仅编译不需要设备:多设备未选择、无设备、设备未授权都不应挡住编译
+  let device = null;
+  try {
+    device = await pickDevice();
+  } catch (e) {
+    if (e instanceof CliError && e.code === EXIT.ENV) {
       console.log(`⚠ ${e.message.split('\n')[0]}\n(仅编译,不校验设备)`);
-      return null;
+    } else {
+      throw e;
     }
-    throw e;
-  });
+  }
   await build(device);
 }
 
@@ -1328,7 +1397,7 @@ async function cmdClearData() {
 async function cmdLogcat() {
   requireProjectRoot();
   const device = await pickDevice();
-  openLogcat(device);
+  return openLogcat(device);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1542,7 +1611,9 @@ async function cmdDashboard() {
   if (opts.open) {
     const opener = isWin() ? 'cmd.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
     const args = isWin() ? ['/c', 'start', '', out] : [out];
-    cp.spawn(opener, args, { detached: true, stdio: 'ignore' }).unref();
+    const openerProc = cp.spawn(opener, args, { detached: true, stdio: 'ignore' });
+    openerProc.on('error', (error) => console.error(`打开浏览器失败:${error.message},请手动打开 ${out}`));
+    openerProc.unref();
     console.log('已在默认浏览器打开');
   } else {
     console.log('在浏览器打开:node ar.js dashboard --open');
@@ -1572,8 +1643,8 @@ const IMPL = {
 
 (async () => {
   try {
-    await IMPL[command]();
-    process.exit(EXIT.OK);
+    const code = await IMPL[command]();
+    process.exit(typeof code === 'number' ? code : EXIT.OK);
   } catch (e) {
     if (e instanceof CliError) {
       console.error(`\n❌ ${e.message}`);
