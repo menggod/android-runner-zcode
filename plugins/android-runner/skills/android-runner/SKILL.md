@@ -1,6 +1,6 @@
 ---
 name: android-runner
-description: Android 开发运行辅助:ZCode 侧栏图形面板(设备/编译/安装/启动/日志),以及命令行式的编译安装启动、设备管理、logcat、环境自检。当用户要求打开 Android 面板、运行/调试 Android 工程、把 App 装到手机、看设备日志、启动模拟器、gradle 编译打包、检查 adb/SDK/JDK 环境时使用。移植自 VSCode 扩展 Android Device Runner。
+description: Android 开发运行辅助:ZCode 侧栏图形面板(设备/编译/安装/启动/日志),以及命令行式的编译安装启动、设备管理、logcat、环境自检。当用户要求打开 Android 面板、运行/调试 Android 工程、把 App 装到手机、看设备日志、启动模拟器、gradle 编译打包、检查 adb/SDK/JDK 环境时使用。
 ---
 
 # Android Runner
@@ -65,7 +65,7 @@ node "${ZCODE_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/ar.js" <命令> [参�
 
 | 现象 | 处理 |
 |---|---|
-| 面板打不开 | 确认插件已启用;看「设置 → 插件」详情里 MCP 服务器是否报错。启动器会自动找 node,找不到时提示设置 `ANDROID_RUNNER_NODE` |
+| 面板打不开 | 确认插件已启用;看「设置 → 插件」详情里 MCP 服务器是否报错。MCP 服务器由 `node` 启动,需要 Node.js 18+ 在 PATH 中 |
 | 面板显示"未选择 Gradle 工程" | 工作区里没有或有多含 gradlew 的工程 → 用面板顶部下拉框选,或调用 `open_panel` 时传 `project` |
 | 设备 unauthorized | 手机上点「允许 USB 调试」 |
 | 设备 offline | 拔插 USB 或 `adb kill-server` |

@@ -1,20 +1,38 @@
 {
-  "name": "android-runner",
+  "name": "android-runner-zcode",
+  "owner": {
+    "name": "menggod",
+    "url": "https://github.com/menggod"
+  },
   "plugins": [
     {
       "name": "android-runner",
       "source": "./plugins/android-runner",
-      "version": "0.3.3",
-      "category": "developer-tools",
-      "description": "Android Device Runner for ZCode: a side panel for devices, build, install, launch and logcat, with zero-config detection of the Gradle project, adb, SDK and JDK. Port of the Android Device Runner VS Code extension.",
+      "icon": "https://raw.githubusercontent.com/menggod/android-runner-zcode/main/assets/icon.png",
       "displayName": "Android Device Runner",
       "displayName_i18n": {
         "zh-CN": "Android 设备运行器"
       },
+      "description": "Android device runner for ZCode: a side panel with devices, build, install, launch and logcat, plus zero-config detection of the Gradle project, adb, SDK and JDK.",
       "description_i18n": {
-        "zh-CN": "ZCode 侧栏面板:跟随当前窗口的工程,设备/编译/安装/启动/日志一键操作;工程、SDK、JDK、adb 全自动探测,签名不一致自动替换。",
-        "en": "ZCode side panel: devices, build, install, launch and logcat for the project of the current window. Zero-config detection of Gradle, adb, SDK and JDK."
-      }
+        "zh-CN": "Android 设备运行器:ZCode 侧栏面板里看设备、编译、安装、启动、看日志;工程、SDK、JDK、adb 全自动探测。",
+        "en": "Android device runner with a side panel: devices, build, install, launch and logcat, with zero-config detection of the Gradle project, adb, SDK and JDK."
+      },
+      "version": "0.4.0",
+      "category": "developer-tools",
+      "author": {
+        "name": "menggod",
+        "url": "https://github.com/menggod"
+      },
+      "keywords": [
+        "android",
+        "adb",
+        "gradle",
+        "apk",
+        "logcat",
+        "device",
+        "emulator"
+      ]
     }
   ]
 }

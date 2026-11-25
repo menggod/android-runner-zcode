@@ -21,7 +21,7 @@ import os from 'node:os';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const AR = join(HERE, 'ar.js');
 const ASSET_ROOT = join(HERE, '..', 'assets');
-const PLUGIN_VERSION = '0.3.3';
+const PLUGIN_VERSION = '0.4.0';
 const SURFACE_ID = 'android-runner';
 const PANEL_URI = `ui://${SURFACE_ID}/panel.html`;
 const ASSET_PREFIX = `ui://${SURFACE_ID}/assets/`;
