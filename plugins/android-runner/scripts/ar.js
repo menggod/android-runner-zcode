@@ -26,7 +26,7 @@ const path = require('path');
 const cp = require('child_process');
 const { discoverModules, discoverFlavors, hasFlavorConfig, moduleDirectory, findApk, apkInfo } = require('./project-info.js');
 
-const VERSION = '0.4.6';
+const VERSION = '0.4.7';
 const EXIT = { OK: 0, FAIL: 1, ENV: 2, CONFIRM: 3, CANCELLED: 130 };
 
 class CliError extends Error {
@@ -2006,7 +2006,7 @@ function renderDashboard(d) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Android Runner · ${esc(path.basename(d.root || ''))}</title>
+<title>Android Runner v${VERSION} · ${esc(path.basename(d.root || ''))}</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -2014,6 +2014,7 @@ function renderDashboard(d) {
   .wrap { max-width: 880px; margin: 0 auto; padding: 28px 20px 48px; }
   h1 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
   h1 .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, #3ddc84, #2bb673); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; color: #0b1210; }
+  h1 .ver { font-size: 11.5px; font-weight: 500; color: #8a94a3; margin-left: 2px; }
   .meta { color: #8a94a3; font-size: 12.5px; margin-bottom: 22px; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #8a94a3; margin: 26px 0 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
@@ -2044,7 +2045,7 @@ function renderDashboard(d) {
 </head>
 <body>
 <div class="wrap">
-  <h1><span class="logo">🤖</span> Android Runner</h1>
+  <h1><span class="logo">🤖</span> Android Runner <span class="ver">v${VERSION}</span></h1>
   <div class="meta">${esc(path.basename(d.root))} · 模块 ${esc(d.module)} · ${esc(d.variant)} · 生成于 ${new Date().toLocaleString()} · 刷新:对 ZCode 说「刷新 Android 面板」</div>
 
   <h2>设备</h2>
