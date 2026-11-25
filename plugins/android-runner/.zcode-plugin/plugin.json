@@ -1,0 +1,36 @@
+{
+  "name": "android-runner",
+  "version": "0.3.3",
+  "description": "Android Device Runner for ZCode: 侧栏图形面板 + 自动探测 Gradle 工程、adb、SDK、JDK,一键编译→安装→启动 Android App,管理真机/模拟器与 logcat。移植自 menggod/android-runner (VSCode 扩展 Android Device Runner)。",
+  "description_i18n": {
+    "zh-CN": "Android 设备运行器:ZCode 侧栏面板里看设备、编译、安装、启动、看日志;工程/SDK/JDK/adb 全自动探测。",
+    "en": "Android device runner with a side panel: devices, build, install, launch and logcat, with zero-config detection."
+  },
+  "author": { "name": "menggod" },
+  "skills": "./skills",
+  "commands": "./commands",
+  "mcpServers": {
+    "android-runner": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/launch.sh"],
+      "cwd": "${ZCODE_PROJECT_DIR}",
+      "env": {
+        "ZCODE_WORKSPACE_ROOT": "${ZCODE_PROJECT_DIR}"
+      },
+      "isolation": "workspace"
+    }
+  },
+  "ui": {
+    "surfaces": [
+      {
+        "id": "android-runner",
+        "title": { "zh-CN": "Android 设备", "en-US": "Android Runner" },
+        "icon": "smartphone",
+        "server": "android-runner",
+        "resourceUri": "ui://android-runner/panel.html",
+        "availability": "session"
+      }
+    ]
+  }
+}

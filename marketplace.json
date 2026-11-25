@@ -1,0 +1,20 @@
+{
+  "name": "android-runner",
+  "plugins": [
+    {
+      "name": "android-runner",
+      "source": "./plugins/android-runner",
+      "version": "0.3.3",
+      "category": "developer-tools",
+      "description": "Android Device Runner for ZCode: a side panel for devices, build, install, launch and logcat, with zero-config detection of the Gradle project, adb, SDK and JDK. Port of the Android Device Runner VS Code extension.",
+      "displayName": "Android Device Runner",
+      "displayName_i18n": {
+        "zh-CN": "Android 设备运行器"
+      },
+      "description_i18n": {
+        "zh-CN": "ZCode 侧栏面板:跟随当前窗口的工程,设备/编译/安装/启动/日志一键操作;工程、SDK、JDK、adb 全自动探测,签名不一致自动替换。",
+        "en": "ZCode side panel: devices, build, install, launch and logcat for the project of the current window. Zero-config detection of Gradle, adb, SDK and JDK."
+      }
+    }
+  ]
+}
